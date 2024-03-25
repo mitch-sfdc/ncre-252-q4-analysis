@@ -1,0 +1,43 @@
+package industries.nearcore.rule.engine;
+
+import java.util.List;
+import java.io.Serializable;
+import java.time.LocalDate;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Currency;
+
+
+public class cartLineDetails implements Serializable{
+    private static final long serialVersionUID = 1L;
+    private String cartLineProductCatalog;
+    private String cartLineProduct;
+
+
+    public String getCartLineProductCatalog(){
+        return cartLineProductCatalog;
+    }
+
+    public void setCartLineProductCatalog( String cartLineProductCatalog ){
+        this.cartLineProductCatalog = cartLineProductCatalog;
+    }
+
+    public String getCartLineProduct(){
+        return cartLineProduct;
+    }
+
+    public void setCartLineProduct( String cartLineProduct ){
+        this.cartLineProduct = cartLineProduct;
+    }
+
+    private Map<Object, Object> cartLineAttribute;
+
+    public Map<Object, Object> getCartLineAttribute(){
+        return cartLineAttribute;
+    }
+
+    public void setCartLineAttribute( Map<Object, Object> cartLineAttribute ){
+        this.cartLineAttribute = cartLineAttribute;
+    }
+
+}

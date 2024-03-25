@@ -1,0 +1,136 @@
+package industries.nearcore.rule.engine;
+
+import java.lang.Number;
+import java.lang.String;
+import java.lang.Boolean;
+import java.math.BigDecimal;
+import java.lang.Double;
+import java.util.*;
+import java.time.*;
+
+global industries.nearcore.rule.engine.ActionHelper actionHelper;
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-1"
+dialect "java"
+salience -2B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}"),  cartLineProductCategoryId == "Category1"))
+        Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ),  $qty : cartLineItemQuantity != null), sum($qty) )
+    then
+        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-1");
+
+end
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-2"
+dialect "java"
+salience -2B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}" ),  cartLineProductCategoryId == "Category1"))
+        Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ),  $qty : cartLineItemQuantity != null), sum($qty) )
+    then
+         actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-2");
+
+end
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-3"
+dialect "java"
+salience -3B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}" ),  cartLineProductCategoryId == "Category1"))
+        $cartDetails2 : cartDetails(transactionAmount >= 500.0B,  transactionAmount <= 1000.0B,  currencyISOCode == "USD")
+    then
+       actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-3");
+
+end
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-4"
+dialect "java"
+salience -3B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}" ),  cartLineProductCategoryId == "Category1"))
+        $cartDetails2 : cartDetails(transactionAmount >= 500.0B,  transactionAmount <= 1000.0B,  currencyISOCode == "USD")
+    then
+        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-4");
+
+end
+
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-5"
+dialect "java"
+salience -4B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
+        $cartLineDetails4 : cartLineDetails(cartLineProductCategoryId == "Category1")
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}" ),  cartLineProductCategoryId == "Category1"))
+        Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ),  $qty : cartLineItemQuantity != null), sum($qty) )
+        Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{2}" ),  $qty : cartLineItemQuantity != null), sum($qty) )
+    then
+        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-5");
+end
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-6"
+dialect "java"
+salience -4B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
+        $cartLineDetails4 : cartLineDetails(cartLineProductCategoryId == "Category1")
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}" ),  cartLineProductCategoryId == "Category1"))
+        Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ),  $qty : cartLineItemQuantity != null), sum($qty) )
+        Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId == ("{2}" ),  $qty : cartLineItemQuantity != null), sum($qty) )
+    then
+        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-6");
+end
+
+
+
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-7"
+dialect "java"
+salience -5B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}" ),  cartLineProductCategoryId == "Category1"))
+        $cartLineDetails2 : cartLineDetails(cartLineProductId != ("NotInProduct"))
+    then
+       actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-7");
+
+end
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-8"
+dialect "java"
+salience -5B
+date-effective "2-Nov-2023"
+    when
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
+        //exists($cartLineDetails1 : cartLineDetails(cartLineProductId == ("{1}" ),  cartLineProductCategoryId == "Category1"))
+        $cartLineDetails2 : cartLineDetails(cartLineProductId != ("NotInProduct"))
+    then
+        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-8");
+
+end
+
+
+
+
+
+
+

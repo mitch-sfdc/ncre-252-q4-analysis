@@ -1,0 +1,32 @@
+package industries.nearcore.rule.engine;
+
+import java.lang.Number;
+import java.lang.String;
+import java.lang.Boolean;
+import java.math.BigDecimal;
+import java.lang.Double;
+import java.util.*;
+import java.time.*;
+import industries.nearcore.rule.engine.cartDetails;
+import industries.nearcore.rule.engine.cartLineDetails;
+import industries.nearcore.rule.engine.loyaltyMember;
+
+global industries.nearcore.rule.engine.ActionHelper actionHelper;
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-7"
+dialect "java"
+salience -5
+enabled true
+date-effective "2-Nov-2023"
+    when
+        $c : cartLineDetails(cartLineProductId not in ("NotInProduct"), discount == 0.0)
+        loyaltyMember(isLoyaltyMember == true)
+        exists(cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
+    then
+       modify($c) '{' setDiscount(0.1) '}'
+end
+
+
+
+
+

@@ -1,0 +1,30 @@
+package industries.nearcore.rule.engine;
+
+import java.lang.Number;
+import java.lang.String;
+import java.lang.Boolean;
+import java.math.BigDecimal;
+import java.lang.Double;
+import java.util.*;
+import java.time.*;
+
+rule "SyncServiceRule"
+dialect "java"
+salience 0B
+date-effective "2-Nov-2023"
+    when
+    	cartDetails()
+        cartLineDetails()
+    then
+        System.out.println("abc");
+end
+
+rule "PCMBurgerRule-1"
+dialect "java"
+salience 1B
+date-effective "2-Nov-2023"
+    when
+        $cartLineDetails1 : cartLineDetails(cartLineProduct in ("Veg Burger" , "Veg Whopper" ) && cartLineAttribute["SauceType"] == "Spicy")
+    then
+        System.out.println("abc");
+end

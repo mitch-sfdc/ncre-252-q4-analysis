@@ -1,0 +1,21 @@
+package industries.nearcore.rule.engine;
+
+import java.util.List;
+import java.io.Serializable;
+import java.time.LocalDate;
+import java.util.Currency;
+
+public class cartDetails implements Serializable{
+    private static final long serialVersionUID = 1L;
+    private List<cartLineDetails> cartLineDetailsList;
+
+
+    public List<cartLineDetails> getCartLineDetailsList(){
+        return cartLineDetailsList;
+    }
+
+    public void setCartLineDetailsList( List<cartLineDetails> cartLineDetailsList ){
+        this.cartLineDetailsList = cartLineDetailsList;
+    }
+
+}
