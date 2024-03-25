@@ -1,5 +1,10 @@
 # Compiled class file
 *.class
+target/
+
+# IntelliJ related files
+.DS_Store
+.idea
 
 # Log file
 *.log
