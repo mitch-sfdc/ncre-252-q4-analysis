@@ -5,6 +5,27 @@ The process for using this project is to first run the compiler to generate a ``
 
 The two executable classes and their various command line options are defined below.
 
+## DRL Template Files
+This project is driven from a set of DRL template files.  Each template files defines the rules associated with a single rule set.  All of the various DRL template files are located in the ```src/test/resources/UPSDRL``` folder.  The templates format is a standard DRL format with template variables which are populated at runtime to create a final set of DRL files from the template.
+
+The following shows a single rule definition from a rule set template.
+
+```
+rule "UP_RS_193_Rule_NonEliglible_{0}-1"
+dialect "java"
+salience -2
+date-effective "2-Nov-2023"
+    when
+        exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}") && cartLineProductCategoryId == "Category1"))
+        Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ) && $qty : cartLineItemQuantity != null), sum($qty) )
+        $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
+    then
+        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-1");
+end
+```
+
+Template variables take the form of ```{1}```, which will be replaced with a real value using ```java.text.MessageFormat.format(...)``` (see the docs for details).
+
 # Executables
 There are two executable files in this project.  The ```com.salesforce.ncre.Compiler``` class reads a DRL template file, populates the template variables and compiles the resulting DRL files into a ```KJAR``` file. The ```com.salesforce.ncre.Engine``` class reads a previously compiled ```KJAR``` file, creates a knowledge base ```KieContainer``` / ```KieBase```, then generates a sales transaction payload comprised of one ```industries.nearcore.rule.engine.cartDetails``` header and zero or more related ```industries.nearcore.rule.engine.cartLineDetails``` objects.  The sales transaction is then inserted into working memory (in the stateful case) and a call to ```KieSession.fireAllRules()``` made to execute all the rules.
 
@@ -76,3 +97,18 @@ usage: java [options] com.salesforce.ncre.engine
                                         matching line items to be
                                         generated (default: 40)
 ```
+
+## Stateless versus Stateful Rule Evaluation
+By default the ```Engine``` runs the rules in stateful mode.  This is specified by the ```-em``` command line option.
+
+### Stateful Rule Evaluation
+Stateful execution is the default if the ```-em``` command line option is not specified.  In stateful mode the engine generates a sales transaction, inserts all the facts into working memory, then executes the rules by calling ```KieSession.fireAllRules()```.
+
+During stateful execution a standard (stateful) ```KieSession``` is created.  The ```KieSession``` object maintains all the necessary state between requests to evaluate rules, supporting incremental (delta) changes to the sales transaction data without the need to reevaluate the entire sales transaction.
+
+### Stateless Rule Evaluation
+Stateless execution must be specified using the ```-em stateless``` command line option.  In stateless mode the engine generates a sales transaction, however, instead of inserting the facts into working memory (since there is no working memory in stateless mode), a batch of facts is created and the engine evaluates the facts in batch mode for faster processing.
+
+Stateless mode does not support inference.  As such, a rule that fires cannot cause another rule to fire.  The engine simply matches the data to rules, then fires the rules in strict sequential manner.
+
+During stateless execution a ```StatelessKieSession``` session is created instead of a ```KieSession```.  The ```StatelessKieSession``` does not have working memory associated with it, so there is no need to call insert facts as you do with a stateful session.  In stateless mode the engine creates a ```List<Command>``` wherein each ```Command``` is an instance of the ```InsertCommand``` Drools class.  It then populates the ```List``` object with one ```InsertCommand``` for each fact.  Then instead of calling ```KieSession.fireAllRules()```, it calls ```StatelessKieSession.execute(listOfInsertCommands)`` to evaluate the rules in batch mode.
