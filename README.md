@@ -12,6 +12,16 @@ Import the project into your IDE and you should be good to go.
 
 Create the desired run configurations within your IDE to execute various configurations of the compiler and rule engine.
 
+# Some Standard Run Configurations
+I've added lots of command line options to execute tests in various ways.  Here are a few key example command line options and an explanation of what they do.
+
+- **Compiler**
+    - No CLI parameters (defaults)
+        * Compiles the ```RuleSet1Original-fixed.drl``` DRL template file to a KJAR named ```org.salesforce.ncre:250_Q4:0.0.1.kjar``` in the project root directory with 500 rule sets resulting in an Exec Model KJAR
+- **Engine**
+    - No CLI parameters (defaults)
+        * Stateful execution of the ```org.salesforce.ncre:250_Q4:0.0.1.kjar``` file using a sales transaction with 200 line items
+
 ## DRL Template Files
 This project is driven from a set of DRL template files.  Each template files defines the rules associated with a single rule set.  All of the various DRL template files are located in the ```src/test/resources/UPSDRL``` folder.  The templates format is a standard DRL format with template variables which are populated at runtime to create a final set of DRL files from the template.
 
