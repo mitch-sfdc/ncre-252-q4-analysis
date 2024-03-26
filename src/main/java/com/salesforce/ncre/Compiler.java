@@ -41,7 +41,7 @@ public class Compiler {
     public final Path path = Paths.get(kjarFilename);
     private String drlFileName = "RuleSet1Original-fixed.drl";
     private String drlPath = "/resources/UPSDRL/" + drlFileName;
-    private Path drlTemplatePath = Path.of("/Users/mitch.christensen/dev/iphone-discount 2/src/test" + drlPath);
+    private Path drlTemplatePath = Path.of("src/test" + drlPath);
     private final String packagePathDrl = "src/main/resources/industries/nearcore/rule/engine/";
     private int rulesetCount = 500;
     private boolean ruleExecModel = true;
@@ -146,7 +146,7 @@ public class Compiler {
     private void defineOptions() {
         //  --df --drlFilename : The name of the source DRL file
         Option option = new Option("df", "drlFilename", true,
-                "The source DRL filename");
+                "The source DRL filename (default : RuleSet1Original-fixed.drl)");
         options.addOption(option);
 
         //  --dpc --duplicatePriorityCount

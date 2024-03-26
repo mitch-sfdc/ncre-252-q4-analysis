@@ -10,7 +10,6 @@ public class cartLineDetails implements Serializable{
     private String cartLineProductCategoryId;
     private Double cartLineItemQuantity;
     private String cartLineProductId;
-    private Double discount = 0.0;
     private Map<String, Double> promotions = new HashMap<>();
 
 
@@ -44,14 +43,6 @@ public class cartLineDetails implements Serializable{
 
     public void setCartLineProductId( String cartLineProductId ){
         this.cartLineProductId = cartLineProductId;
-    }
-
-    public Double getDiscount() {
-        return discount;
-    }
-
-    public void setDiscount(Double discount) {
-        this.discount = discount;
     }
 
     public Map<String, Double> getPromotions() {

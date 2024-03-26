@@ -19,7 +19,7 @@ dialect "java"
 salience -2
 date-effective "2-Nov-2023"
     when
-        exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}") && cartLineProductCategoryId == "Category1", discount == 0.0))
+        exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}") && cartLineProductCategoryId == "Category1", promotions.size == 0))
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
     then
@@ -32,7 +32,7 @@ dialect "java"
 salience -2
 date-effective "2-Nov-2023"
     when
-        exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1", discount == 0.0))
+        exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1", promotions.size == 0))
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
     then
@@ -46,11 +46,11 @@ salience -3
 date-effective "2-Nov-2023"
     when
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
-        $cartDetails2 : cartDetails(transactionAmount >= 500.0B && transactionAmount <= 1000.0B && currencyISOCode == "USD", discountAmount == 0.0)
+        $cartDetails2 : cartDetails(transactionAmount >= 500.0B && transactionAmount <= 1000.0B && currencyISOCode == "USD", promotions.size == 0)
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
     then
        // apply a 10% discount
-       modify($cartDetails2) '{' setDiscountAmount(0.1) '}'
+       modify($cartDetails2) '{' addPromotion("Executed UP_RS_193_Rule_NonEliglible_{0}-3", 0.1) '}'
 
      actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-3");
 end
@@ -62,11 +62,11 @@ salience -3
 date-effective "2-Nov-2023"
     when
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
-        $cartDetails2 : cartDetails(transactionAmount >= 500.0B && transactionAmount <= 1000.0B && currencyISOCode == "USD", discountAmount == 0.0)
+        $cartDetails2 : cartDetails(transactionAmount >= 500.0B && transactionAmount <= 1000.0B && currencyISOCode == "USD", promotions.size == 0)
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
     then
        // apply a 10% discount
-       modify($cartDetails2) '{' setDiscountAmount(0.1) '}'
+       modify($cartDetails2) '{' addPromotion("Executed UP_RS_193_Rule_NonEliglible_{0}-3", 0.1) '}'
 
       actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-4");
 end
@@ -82,10 +82,10 @@ date-effective "2-Nov-2023"
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{2}" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
-        $cartLineDetails4 : cartLineDetails(cartLineProductCategoryId == "Category1", discount == 0.0)
+        $cartLineDetails4 : cartLineDetails(cartLineProductCategoryId == "Category1", promotions.size == 0)
     then
        // apply a 10% discount
-       modify($cartLineDetails4) '{' setDiscount(0.1) '}'
+       modify($cartLineDetails4) '{' addPromotion("Executed UP_RS_193_Rule_NonEliglible_{0}-3", 0.1) '}'
 
        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-5");
 end
@@ -100,10 +100,10 @@ date-effective "2-Nov-2023"
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{2}" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
-        $cartLineDetails4 : cartLineDetails(cartLineProductCategoryId == "Category1", discount == 0.0)
+        $cartLineDetails4 : cartLineDetails(cartLineProductCategoryId == "Category1", promotions.size == 0)
     then
        // apply a 10% discount
-       modify($cartLineDetails4) '{' setDiscount(0.1) '}'
+       modify($cartLineDetails4) '{' addPromotion("Executed UP_RS_193_Rule_NonEliglible_{0}-3", 0.1) '}'
 
       actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-6");
 end
@@ -118,11 +118,11 @@ salience -5
 date-effective "2-Nov-2023"
     when
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
-        $cartLineDetails2 : cartLineDetails(cartLineProductId != ("NotInProduct"), discount == 0.0)
+        $cartLineDetails2 : cartLineDetails(cartLineProductId != ("NotInProduct"), promotions.size == 0)
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
     then
        // apply a 10% discount
-       modify($cartLineDetails2) '{' setDiscount(0.1) '}'
+       modify($cartLineDetails2) '{' addPromotion("Executed UP_RS_193_Rule_NonEliglible_{0}-3", 0.1) '}'
 
        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-7");
 
@@ -135,11 +135,11 @@ salience -5
 date-effective "2-Nov-2023"
     when
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
-        $cartLineDetails2 : cartLineDetails(cartLineProductId not in ("NotInProduct"), discount == 0.0)
+        $cartLineDetails2 : cartLineDetails(cartLineProductId not in ("NotInProduct"), promotions.size == 0)
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == false)
     then
        // apply a 10% discount
-       modify($cartLineDetails2) '{' setDiscount(0.1) '}'
+       modify($cartLineDetails2) '{' addPromotion("Executed UP_RS_193_Rule_NonEliglible_{0}-3", 0.1) '}'
 
        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-8");
 end

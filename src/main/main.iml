@@ -26,5 +26,6 @@
     <orderEntry type="library" name="Maven: commons-cli:commons-cli:1.6.0" level="project" />
     <orderEntry type="library" name="Maven: org.drools:drools-model-codegen:8.44.0.Final" level="project" />
     <orderEntry type="library" name="Maven: org.drools:drools-model-compiler:8.44.0.Final" level="project" />
+    <orderEntry type="library" name="Maven: org.kie:kie-internal:8.44.0.Final" level="project" />
   </component>
 </module>

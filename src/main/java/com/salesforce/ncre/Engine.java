@@ -154,7 +154,7 @@ public class Engine {
                     cartLineDetails lineItem =
                             cart.getCartLineDetailsList()
                                     .get(new Random().nextInt(cart.getCartLineDetailsList().size()));
-                    lineItem.setDiscount(0.0);
+                    lineItem.getPromotions().clear();
                     kieSession.update(factToFactHandleMap.get(lineItem), lineItem);
                 }
 
@@ -174,7 +174,7 @@ public class Engine {
             // dispose of the current session
             cart.setDiscountAmount(0.0);
             for (cartLineDetails lineItem : cart.getCartLineDetailsList()) {
-                lineItem.setDiscount(0.0);
+                lineItem.getPromotions().clear();
             }
             factToFactHandleMap.clear();
             kieSession.dispose();
