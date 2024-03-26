@@ -5,6 +5,13 @@ The process for using this project is to first run the compiler to generate a ``
 
 The two executable classes and their various command line options are defined below.
 
+# Building Locally
+Pull this repository into your local environment, then run ```mvn clean install```.  This should compile and run a unit test that both compiles and runs the engine.
+
+Import the project into your IDE and you should be good to go.
+
+Create the desired run configurations within your IDE to execute various configurations of the compiler and rule engine.
+
 ## DRL Template Files
 This project is driven from a set of DRL template files.  Each template files defines the rules associated with a single rule set.  All of the various DRL template files are located in the ```src/test/resources/UPSDRL``` folder.  The templates format is a standard DRL format with template variables which are populated at runtime to create a final set of DRL files from the template.
 
