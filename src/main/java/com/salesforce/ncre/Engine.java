@@ -1,10 +1,16 @@
 package com.salesforce.ncre;
 
+import com.salesforce.ncre.debug.PhreakActivationIteratorNcre;
 import industries.nearcore.rule.engine.ActionHelper;
 import industries.nearcore.rule.engine.cartDetails;
 import industries.nearcore.rule.engine.cartLineDetails;
 import industries.nearcore.rule.engine.loyaltyMember;
 import org.apache.commons.cli.*;
+import org.drools.core.common.ReteEvaluator;
+import org.drools.core.rule.consequence.InternalMatch;
+import org.drools.serialization.protobuf.iterators.ActivationIterator;
+import org.drools.core.util.Iterator;
+import org.drools.serialization.protobuf.iterators.PhreakActivationIterator;
 import org.kie.api.KieBase;
 import org.kie.api.KieBaseConfiguration;
 import org.kie.api.KieServices;
@@ -16,6 +22,7 @@ import org.kie.api.command.Command;
 import org.kie.api.conf.SequentialOption;
 import org.kie.api.event.rule.AfterMatchFiredEvent;
 import org.kie.api.event.rule.DefaultAgendaEventListener;
+import org.kie.api.event.rule.MatchCancelledEvent;
 import org.kie.api.io.Resource;
 import org.kie.api.marshalling.Marshaller;
 import org.kie.api.runtime.KieContainer;
@@ -23,12 +30,15 @@ import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.StatelessKieSession;
 import org.kie.api.runtime.rule.FactHandle;
 import org.kie.internal.command.CommandFactory;
+import org.kie.internal.runtime.StatefulKnowledgeSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
@@ -52,6 +62,12 @@ public class Engine {
     private int executionCount = 1;
     private int deltaSyncCount = 1;
     private final Map<Object, FactHandle> factToFactHandleMap = new HashMap<>();
+    private boolean useProductCatalog = false;
+    private int productCount = 10_000;
+    private int productCategoryCount = 10;
+    private boolean dumpPayload = false;
+    private boolean marshallSession = false;
+    private boolean dumpSession = false;
 
     private enum ExecutionMode {
         STATELESS, STATEFUL
@@ -124,6 +140,7 @@ public class Engine {
             kieSession.setGlobal("actionHelper", actionHelper);
 
             // insert the cart data into working memory
+            LOG.debug("Inserting facts into working memory...");
             innerStart = Instant.now();
             for (cartLineDetails lineItem : cart.getCartLineDetailsList()) {
                 kieSession.insert(lineItem);
@@ -133,24 +150,39 @@ public class Engine {
             factToFactHandleMap.put(cart, kieSession.insert(cart));
             insertDuration = insertDuration.plus(Duration.between(innerStart, Instant.now()));
 
-            kieSession.addEventListener( new DefaultAgendaEventListener() {
-                public void afterMatchFired(AfterMatchFiredEvent event) {
-                    super.afterMatchFired( event );
-                    if(LOG.isDebugEnabled())
-                        LOG.debug(event.toString());
+            class MyListener extends DefaultAgendaEventListener {
+                public int matchCount = 0;
+                public int cancelledCount = 0;
+
+                public void matchCancelled(MatchCancelledEvent event) {
+                    if(LOG.isTraceEnabled())
+                        LOG.trace(event.toString());
+                    cancelledCount++;
                 }
-            });
+
+                public void afterMatchFired(AfterMatchFiredEvent event) {
+                    super.afterMatchFired(event);
+                    if (LOG.isTraceEnabled())
+                        LOG.trace(event.toString());
+                    matchCount++;
+                }
+            };
+            MyListener myListener = new MyListener();
+            kieSession.addEventListener(myListener);
 
             // fire the rules
+            LOG.debug("Firing rules...");
             innerStart = Instant.now();
-            fullSyncRuleExecutionCount = fullSyncRuleExecutionCount + kieSession.fireAllRules();
+            fullSyncRuleExecutionCount += kieSession.fireAllRules();
             fullExecuteDuration = fullExecuteDuration.plus(Duration.between(innerStart, Instant.now()));
+            LOG.debug("Total match count: " + myListener.matchCount);
+            LOG.debug("Total match cancelled count: " + myListener.cancelledCount);
 
             // apply optional delta sync operations
             innerStart = Instant.now();
             for (int j = 0; j < this.deltaSyncCount; j++) {
                 // modify some random rows, setting the line item discount back to 0.0
-                for (int k = 0; k < cart.getCartLineDetailsList().size() * 0.01; k++) {
+                for (int k = 0; k < cart.getCartLineDetailsList().size() * 0.05; k++) {
                     cartLineDetails lineItem =
                             cart.getCartLineDetailsList()
                                     .get(new Random().nextInt(cart.getCartLineDetailsList().size()));
@@ -163,13 +195,68 @@ public class Engine {
             }
             deltaSyncDuration = deltaSyncDuration.plus(Duration.between(innerStart, Instant.now()));
 
-            if(isInteractiveMode && this.executionCount == 1)
-                prompt("Press any key to begin marshalling...");
+            // iterate the activations
+            LOG.debug("Iterating internal activations...");
+            PhreakActivationIteratorNcre it = PhreakActivationIteratorNcre.iterator((ReteEvaluator) kieSession);
+            Map<String, List<InternalMatch>> ruleNameToInternalMatchMap = new HashMap<>();
+            List<InternalMatch> distinctMatchList = new ArrayList<>();
+            for (InternalMatch act = (InternalMatch) it.next(); act != null; act = (InternalMatch) it.next() ) {
+                String ruleName = act.getRule().getName();
 
-            innerStart = Instant.now();
-            ByteArrayOutputStream baos = marshall(ks, kieSession);
-            marshallingDuration = marshallingDuration.plus(Duration.between(innerStart, Instant.now()));
-            serializedSessionBytes += baos.size();
+                if(distinctMatchList.size() == 0) {
+                    distinctMatchList.add(act);
+                } else {
+                    boolean identityMatch = false;
+                    // search for an identity match
+                    for(InternalMatch match : distinctMatchList) {
+                        if(match == act)
+                            identityMatch = true;
+                    }
+                    if(!identityMatch)
+                        distinctMatchList.add(act);
+                }
+
+                if(ruleNameToInternalMatchMap.keySet().contains(ruleName)) {
+                    // add the current activation to the list for this rule
+                    ruleNameToInternalMatchMap.get(ruleName).add(act);
+                } else {
+                    // create a new list of activations
+                    List<InternalMatch> matches = new ArrayList<>();
+                    matches.add(act);
+                    ruleNameToInternalMatchMap.put(ruleName, matches);
+                }
+            }
+
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Total internal match count : %,d",
+                        ruleNameToInternalMatchMap.values().stream().mapToInt(List::size).sum()));
+                LOG.debug(String.format("Unique internal match objects: %,d", distinctMatchList.size()));
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("Rule to internal match mapping: ");
+                    for (String ruleName : ruleNameToInternalMatchMap.keySet()) {
+                        LOG.trace(String.format("Rule : %s", ruleName));
+                        for(InternalMatch match : ruleNameToInternalMatchMap.get(ruleName)) {
+                            LOG.trace(String.format("    %s", match));
+                        }
+                    }
+                }
+            }
+
+            if (this.marshallSession) {
+                if(isInteractiveMode && this.executionCount == 1)
+                    prompt("Press any key to begin marshalling...");
+
+                innerStart = Instant.now();
+                ByteArrayOutputStream baos = marshall(ks, kieSession);
+                marshallingDuration = marshallingDuration.plus(Duration.between(innerStart, Instant.now()));
+                serializedSessionBytes += baos.size();
+
+                if(this.dumpSession) {
+                    FileOutputStream fileOutputStream = new FileOutputStream("kieSession.bytes");
+                    fileOutputStream.write(baos.toByteArray());
+                    fileOutputStream.close();
+               }
+            }
 
             // dispose of the current session
             cart.setDiscountAmount(0.0);
@@ -195,6 +282,9 @@ public class Engine {
         System.out.println(String.format("Sessions size: %,d bytes (%,d/request) in %,dms (%,2.1f/request)",
                 serializedSessionBytes, serializedSessionBytes / this.executionCount,
                 marshallingDuration.toMillis(), marshallingDuration.toMillis() / Double.valueOf(this.executionCount)));
+        if (this.dumpActions) {
+            System.out.println("Actions: \n" + actionHelper.toJson());
+        }
     }
 
     private void executeStatelessRules(KieContainer kieContainer, cartDetails cart) throws IOException {
@@ -234,18 +324,32 @@ public class Engine {
         LOG.info(String.format("Executing stateless engine %,d times on %,d line items...",
                 this.executionCount, cart.getCartLineDetailsList().size()));
         Instant start = Instant.now();
+        Duration ruleExecutionDuration = Duration.ZERO;
         for (int i = 0; i < this.executionCount; i++) {
+            start = Instant.now();
             kieSession.execute(CommandFactory.newBatchExecution(commands));
+            ruleExecutionDuration = ruleExecutionDuration.plus(Duration.between(start, Instant.now()));
+
+            // clear all the applied promotions prior to the next execution
+            commands.clear();
+            cart.getPromotions().clear();
+            commands.add(CommandFactory.newInsert(cart));
+            commands.add(CommandFactory.newInsert(cart.getLoyaltyMember()));
+            for (cartLineDetails lineItem : cart.getCartLineDetailsList()) {
+                lineItem.getPromotions().clear();
+                commands.add(CommandFactory.newInsert(lineItem));
+            }
         }
-        Duration duration = Duration.between(start, Instant.now());
-        System.out.printf("Number of rules fired: %,d in %,dms total time, %,dms per execution\n",
+        System.out.printf("Number of rules fired: %,d in %,dms total time (%,2.1fms/request)\n",
                 actionHelper.actionItemMap.values().stream()
                         .mapToInt(Integer::intValue)
                         .sum(),
-                duration.toMillis(), duration.toMillis() / this.executionCount);
+                ruleExecutionDuration.toMillis(),
+                ruleExecutionDuration.toMillis() / Double.valueOf(this.executionCount));
     }
 
     private cartDetails generateCartDetails() {
+        Random r = new Random();
         List<cartLineDetails> lineItemList = new ArrayList<>();
 
         // create the shopping cart and populate the fields
@@ -260,10 +364,10 @@ public class Engine {
         cart.setLoyaltyMember(loyaltyMember);
 
         // create the matching line items
-        for(int i = 1 ; i <= this.totalMatchingLineItems ; i++){
+        for(int i = 1 ; i <= (this.useProductCatalog ? this.totalLineItems : this.totalMatchingLineItems); i++){
             cartLineDetails lineItem = new cartLineDetails();
-            lineItem.setCartLineProductId("Product"+i);
-            lineItem.setCartLineProductCategoryId("Category1");
+            lineItem.setCartLineProductId("Product" + (useProductCatalog ? r.nextInt(this.productCount) : i));
+            lineItem.setCartLineProductCategoryId("Category" + (useProductCatalog ? r.nextInt(this.productCategoryCount) : "1"));
             lineItem.setCartLineItemId("UnifiedPromotion_Q4_Validation");
             lineItem.setCartLineItemQuantity(10.0);
             lineItemList.add(lineItem);
@@ -271,18 +375,21 @@ public class Engine {
 
 
         // create the non-matching line items
-        for(int i = 1 ; i <= (this.totalLineItems - this.totalMatchingLineItems) ; i++){
-            cartLineDetails lineItem = new cartLineDetails();
-            lineItem.setCartLineProductId("XProduct"+i);
-            lineItem.setCartLineProductCategoryId("Category2");
-            lineItem.setCartLineItemId("UnifiedPromotion_Q4_Validation");
-            lineItem.setCartLineItemQuantity(10.0);
-            lineItemList.add(lineItem);
+        if (!this.useProductCatalog) {
+            for(int i = 1 ; i <= (this.totalLineItems - this.totalMatchingLineItems) ; i++){
+                cartLineDetails lineItem = new cartLineDetails();
+                lineItem.setCartLineProductId("XProduct"+i);
+                lineItem.setCartLineProductCategoryId("Category2");
+                lineItem.setCartLineItemId("UnifiedPromotion_Q4_Validation");
+                lineItem.setCartLineItemQuantity(10.0);
+                lineItemList.add(lineItem);
+            }
         }
 
         cart.setCartLineDetailsList(lineItemList);
 
-        LOG.debug("payload:\n" + cart.toJson());
+        if(this.dumpPayload)
+            System.out.println("payload:\n" + cart.toJson());
 
         return cart;
     }
@@ -290,7 +397,7 @@ public class Engine {
     // Display a prompt and wait for the RETURN key
     private void prompt(String x) {
         System.out.println(x);
-        new java.util.Scanner(System.in).nextLine();
+        new Scanner(System.in).nextLine();
     }
 
 
@@ -307,65 +414,95 @@ public class Engine {
      * Define the command line options
      */
     private void defineOptions() {
-        //  --c --compile : Force rule compilation
+        //  -c --compile : Force rule compilation
         Option option = new Option("c", "compile", false,
                 "Compile rules before executing (default : false)");
         options.addOption(option);
 
-        // --dsc, --deltaSyncCount : The number of delta sync operations to run for stateful execution (default: 1)
+        // -da, --dumpActions : Dump the resulting action results to STDOUT (default: false)
+        option = new Option("da", "dumpActions", false,
+                "Dump the resulting action results to STDOUT (default: false)");
+        options.addOption(option);
+
+        // -dp, --dumpPayload : Dump the sales transaction payload in JSON format (default: false)
+        option = new Option("dp", "dumpPayload", false,
+                "Dump the sales transaction payload in JSON format (default: false)");
+        options.addOption(option);
+
+        // -ds, --dumpSession : Write the stateless session to disk as kieSession.bytes (default: false)
+        option = new Option("ds", "dumpSession", false,
+                "Write the stateless session to disk as kieSession.bytes (default: false)");
+        options.addOption(option);
+
+        // -dsc, --deltaSyncCount : The number of delta sync operations to run for stateful execution (default: 1)
         option = new Option("dsc", "deltaSyncCount", true,
                 "The number of delta sync operations to run for stateful execution (default: 1)");
         options.addOption(option);
 
-        // --dump, --dumpActions : Dump all actions to JSON file
-        option = new Option("dump", "dumpActions", false,
-                "Dump all actions to JSON file [true|false] (default: false)");
-        options.addOption(option);
-
-        // --ec, --executionCount : The number of times the engine will be executed against the payload
+        // -ec, --executionCount : The number of times the engine will be executed against the payload
         option = new Option("ec", "executionCount", true,
                 "The number of times the engine will be executed against the payload (default: 1)");
         options.addOption(option);
 
-        // --em, --executionMode : Execute rules either stateful or stateless
+        // -em, --executionMode : Execute rules either stateful or stateless
         option = new Option("em", "executionMode", true,
                 "Stateful or stateless execution [stateful|stateless] (default: stateful)");
         options.addOption(option);
 
-        // --h, --help : Show the command line option menu and exit
+        // -h, --help : Show the command line option menu and exit
         option = new Option("h", "help", false,
                 "Show help menu");
         options.addOption(option);
 
-        // --i, --interactive : Prompt (pause) at key points during execution
+        // -i, --interactive : Prompt (pause) at key points during execution
         option = new Option("i", "interactive", false,
                 "Prompt (pause) at key points in the execution for debugging purposes (default : false)");
         options.addOption(option);
 
-        // --ilm, --isLoyaltyMember : Set loyalty membership value
+        // -ilm, --isLoyaltyMember : Set loyalty membership value
         option = new Option("ilm", "isLoyaltyMember", true,
                 "Set the loyalty membership for this run [true|false] (default : true");
         options.addOption(option);
 
-        // --k KJAR_NAME, --KJAR KJAR_NAME : Set the KJAR filename
+        // -k KJAR_NAME, --KJAR KJAR_NAME : Set the KJAR filename
         option = new Option("k", "kjar", true,
                 "Specify the KJAR filename to be loaded (default: org.salesforce.ncre:250_Q4:0.0.1.kjar)");
         options.addOption(option);
 
-        // --rem, --ruleExecMode : Run the engine using the Drools Rule Exec Model
+        // -ms, --marshallSession : Marshall the KieSession after rule execution (default : false)
+        option = new Option("ms", "marshallSession", false,
+                "Marshall the KieSession after rule execution (default : false)");
+        options.addOption(option);
+
+        //  -pc --productCount : The number of products in the product catalog (default : 10,000)
+        option = new Option("pc", "productCount", true,
+                "The number of products in the product catalog (default : 10,000)");
+        options.addOption(option);
+
+        //  -pcc --productCategoryCount : The number of categories in the product catalog (default : 10)
+        option = new Option("pcc", "productCategoryCount", true,
+                "The number of categories in the product catalog (default : 10)");
+        options.addOption(option);
+
+        // -rem, --ruleExecMode : Run the engine using the Drools Rule Exec Model
         option = new Option("rem", "ruleExecModel", false,
                 "Run the rule engine using the Drools Rule Executable Model mode (default: false)");
         options.addOption(option);
 
-        // --tli LINE_ITEM_COUNT, --totaLineItems LINE_ITEM_COUNT : Set the total number of line items to generate
+        // -tli LINE_ITEM_COUNT, --totaLineItems LINE_ITEM_COUNT : Set the total number of line items to generate
         option = new Option("tli", "totalLineItems", true,
                 "Specify the total number of line items to be generated (default : 200)");
         options.addOption(option);
 
-        // --tmli LINE_ITEM_COUNT, --totaMatchingLineItems LINE_ITEM_COUNT :
+        // -tmli LINE_ITEM_COUNT, --totaMatchingLineItems LINE_ITEM_COUNT :
         // Set the total number of matching line items to generate
         option = new Option("tmli", "totalMatchingLineItems", true,
                 "Specify the total number of matching line items to be generated (default: 40)");
+        options.addOption(option);
+
+        // -upc, --useProductCatalog : Generate product names from a product catalog simulator (default : false)
+        option = new Option("upc", "useProductCatalog", false,
+                "Generate product names from a product catalog simulator (default : false)");
         options.addOption(option);
     }
 
@@ -385,12 +522,20 @@ public class Engine {
                 this.forceCompilation = true;
             }
 
-            if (cmd.hasOption("dsc")) {
-                this.deltaSyncCount = Integer.valueOf(cmd.getOptionValue("dsc"));
+            if (cmd.hasOption("da")) {
+                this.dumpActions = true;
             }
 
-            if (cmd.hasOption("dump")) {
-                this.dumpActions = Boolean.valueOf(cmd.getOptionValue("dump"));
+            if (cmd.hasOption("dp")) {
+                this.dumpPayload = true;
+            }
+
+            if (cmd.hasOption("ds")) {
+                this.dumpSession = true;
+            }
+
+            if (cmd.hasOption("dsc")) {
+                this.deltaSyncCount = Integer.valueOf(cmd.getOptionValue("dsc"));
             }
 
             if (cmd.hasOption("ec")) {
@@ -418,6 +563,18 @@ public class Engine {
                 this.kjarName = cmd.getOptionValue("kjar");
             }
 
+            if(cmd.hasOption("ms")) {
+                this.marshallSession = true;
+            }
+
+            if(cmd.hasOption("pc")) {
+                this.productCount = Integer.valueOf(cmd.getOptionValue("pc"));
+            }
+
+            if(cmd.hasOption("pcc")) {
+                this.productCategoryCount = Integer.valueOf(cmd.getOptionValue("pcc"));
+            }
+
             if(cmd.hasOption("rem")) {
                 this.useExecModel = true;
             }
@@ -429,6 +586,11 @@ public class Engine {
             if (cmd.hasOption("tmli")) {
                 this.totalMatchingLineItems = Integer.valueOf(cmd.getOptionValue("tmli"));
             }
+
+            if(cmd.hasOption("upc")) {
+                this.useProductCatalog = true;
+            }
+
         } catch (ParseException e) {
             System.out.println(e.getMessage());
             helper.printHelp("Usage:", options);

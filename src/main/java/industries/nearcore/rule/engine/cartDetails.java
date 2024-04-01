@@ -1,12 +1,9 @@
 package industries.nearcore.rule.engine;
 
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 import java.io.Serializable;
 import java.time.LocalDate;
-import java.util.Currency;
 import java.time.LocalDateTime;
-import java.util.Map;
 
 
 public class cartDetails implements Serializable{
@@ -17,6 +14,7 @@ public class cartDetails implements Serializable{
     private Double discountAmount = 0.0;
     private loyaltyMember loyaltyMember = null;
     private Map<String, Double> promotions = new HashMap<>();
+    private Set<String> qualifiedPromotions = new HashSet<>();
 
 
     public List<cartLineDetails> getCartLineDetailsList(){
@@ -70,6 +68,16 @@ public class cartDetails implements Serializable{
     public void setPromotions(Map<String, Double> promotions) {
         this.promotions = promotions;
     }
+
+    public Set<String> getQualifiedPromotions() {
+        return qualifiedPromotions;
+    }
+
+    public void setQualifiedPromotions(Set<String> qualifiedPromotions) {
+        this.qualifiedPromotions = qualifiedPromotions;
+    }
+
+    public void addQualifiedPromotion(String ruleName) { this.qualifiedPromotions.add(ruleName); }
 
     // generate JSON
     public String toJson() {

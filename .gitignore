@@ -5,6 +5,7 @@ target/
 # IntelliJ related files
 .DS_Store
 .idea
+*.iml
 
 # Log file
 *.log

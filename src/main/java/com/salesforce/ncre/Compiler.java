@@ -12,6 +12,7 @@ import org.kie.api.builder.ReleaseId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,7 +48,10 @@ public class Compiler {
     private boolean ruleExecModel = true;
     private boolean generateRulePriorities = false;
     private int duplicatePriorityCount = 0;
-    private int productCatalogSize = -1;
+    private boolean useProductCatalog = false;
+    private int productCount = 10_000;
+    private int productCategoryCount = 10;
+    private boolean dumpDrl = false;
 
     // force a singleton
     private Compiler() {}
@@ -80,7 +84,11 @@ public class Compiler {
 
     public void compileDrlRuleExecModel() throws IOException {
         // generate the expanded DRL from the rule set DRL template
-        generateDrl();
+        if (this.useProductCatalog) {
+            generateDrlFromCatalog();
+        } else {
+            generateDrl();
+        }
 
         // compile the generated rule sets
         KieBuilder kieBuilder = ks.newKieBuilder(kfs).buildAll(ExecutableModelProject.class);
@@ -95,6 +103,7 @@ public class Compiler {
     }
 
     private void generateDrl() throws IOException {
+        StringBuilder builder = new StringBuilder();
         // read the (template) DRL contents
         String templateDrl = Files.readString(drlTemplatePath);
 
@@ -104,18 +113,79 @@ public class Compiler {
         for(int i = 1 ; i <= this.rulesetCount ; i++){
             String generatedDrl =
                     MessageFormat.format(templateDrl, String.format("%03d", i),
-                            "Product"+i , "Product"+(i+1));
+                            "Product" + i,
+                            "Product" + (i + 1));
 
             // optionally generate new rule priorities
             if(this.generateRulePriorities) {
                 generatedDrl = generateRulePriorities(generatedDrl);
             }
 
+            if(this.dumpDrl) {
+                builder.append(generatedDrl).append("\n");
+            }
+
             kfs.write(packagePathDrl +"UPSRuleset-"+i+".drl", generatedDrl);
+        }
+
+        if(this.dumpDrl) {
+            // write the DRL to disk
+            FileOutputStream fos = new FileOutputStream(this.releaseId + ".drl");
+            fos.write(builder.toString().getBytes());
+            fos.close();
         }
 
         kfs.generateAndWritePomXML(releaseId);
     }
+
+    private void generateDrlFromCatalog() throws IOException {
+        Random r = new Random();
+        StringBuilder builder = new StringBuilder();
+
+        String templateDrl = Files.readString(drlTemplatePath);
+
+        // read the rule set template and expand/generate the DRL
+        LOG.info(String.format("Generating %,d rule sets from the rule set template: %s",
+                this.rulesetCount, drlTemplatePath));
+        for(int i = 1 ; i <= this.rulesetCount ; i++){
+            String generatedDrl =
+                    MessageFormat.format(templateDrl, String.format("%03d", i),
+                            "Product" + r.nextInt(this.productCount),
+                            "Product" + r.nextInt(this.productCount),
+                            "Category" + r.nextInt(this.productCategoryCount));
+
+            // optionally generate new rule priorities
+            if(this.generateRulePriorities) {
+                generatedDrl = generateRulePriorities(generatedDrl);
+            }
+
+            if(this.dumpDrl) {
+                builder.append(generatedDrl).append("\n");
+            }
+
+            kfs.write(packagePathDrl +"UPSRuleset-"+i+".drl", generatedDrl);
+        }
+
+        if(this.dumpDrl) {
+            // write the DRL to disk
+            FileOutputStream fos = new FileOutputStream(this.releaseId + ".drl");
+            fos.write(builder.toString().getBytes());
+            fos.close();
+        }
+
+        kfs.generateAndWritePomXML(releaseId);
+    }
+
+    private String getNextProductName() {
+        Random r = new Random();
+        StringBuilder builder = new StringBuilder("Product-");
+
+        // get a product name
+        builder.append(r.nextInt(this.productCount));
+
+        return builder.toString();
+    }
+
 
     private String generateRulePriorities(String drl) {
         // calculate a random rule set priority, duplicates allowed
@@ -144,8 +214,13 @@ public class Compiler {
      * Define the command line options
      */
     private void defineOptions() {
+        //  --dd --dumpDrl : Dump the generated DRL to a file with GAV naming (default : false)
+        Option option = new Option("dd", "dumpDrl", false,
+                "Dump the generated DRL to a file with GAV naming (default : false)");
+        options.addOption(option);
+
         //  --df --drlFilename : The name of the source DRL file
-        Option option = new Option("df", "drlFilename", true,
+        option = new Option("df", "drlFilename", true,
                 "The source DRL filename (default : RuleSet1Original-fixed.drl)");
         options.addOption(option);
 
@@ -159,42 +234,52 @@ public class Compiler {
                 "Generate the rule priorities relative to the rule set priorities (default: false)");
         options.addOption(option);
 
-        // --h, --help : Show the command line option menu and exit
+        // -h, --help : Show the command line option menu and exit
         option = new Option("h", "help", false,
                 "Show help menu");
         options.addOption(option);
 
-        // --kf, --kjarFilename : The name of the generated KJAR file (default: org.salesforce.ncre:250_Q4:0.0.1)
+        // -kf, --kjarFilename : The name of the generated KJAR file (default: org.salesforce.ncre:250_Q4:0.0.1)
         option = new Option("kf", "kjarFilename", true,
                 "The generated KJAR filename");
         options.addOption(option);
 
-        // --lib, --libraryName : The rule library name
+        // -lib, --libraryName : The rule library name
         option = new Option("lib", "libraryName", true,
                 "The organization name used in the release ID and default KJAR name");
         options.addOption(option);
 
-        // --on, --orgName : The organization name
+        // -on, --orgName : The organization name
         option = new Option("on", "orgName", true,
                 "The organization name used in the release ID and default KJAR name");
         options.addOption(option);
 
-        // --pcs, --productCatalogSize : The total number of products in the product catalog
-        option = new Option("pcs", "productCatalogSize", true,
-                "The total number of products in the product catalog (default: -1 (sequential))");
+        //  -pc --productCount : The number of products in the product catalog (default : 10,000)
+        option = new Option("pc", "productCount", true,
+                "The number of products in the product catalog (default : 10,000)");
         options.addOption(option);
 
-        // --rc, --rulesetCount : The number of rule sets to generate
+        //  -pcc --productCategoryCount : The number of categories in the product catalog (default : 10)
+        option = new Option("pcc", "productCategoryCount", true,
+                "The number of categories in the product catalog (default : 10)");
+        options.addOption(option);
+
+        // -rc, --rulesetCount : The number of rule sets to generate
         option = new Option("rc", "rulesetCount", true,
                 "The total number of rule sets to generate (default : 500)");
         options.addOption(option);
 
-        // --rem, --ruleExecModel : Generate the KJAR using the Drools Rule Exec Model
+        // -rem, --ruleExecModel : Generate the KJAR using the Drools Rule Exec Model
         option = new Option("rem", "ruleExecModel", false,
                 "Generate the KJAR using the Drools Rule Exec Model [true|false] (default : true)");
         options.addOption(option);
 
-        // --ver, --version : The version of the generated KJAR file
+        // -upc, --useProductCatalog : Generate product names from a product catalog simulator (default : false)
+        option = new Option("upc", "useProductCatalog", false,
+                "Generate product names from a product catalog simulator (default : false)");
+        options.addOption(option);
+
+        // -ver, --version : The version of the generated KJAR file
         option = new Option("ver", "version", true,
                 "The version used in the release ID and default KJAR name");
         options.addOption(option);
@@ -213,10 +298,14 @@ public class Compiler {
         try {
             cmd = parser.parse(options, args);
 
+            if(cmd.hasOption("dd")) {
+                this.dumpDrl = true;
+             }
+
             if(cmd.hasOption("df")) {
                 this.drlFileName = cmd.getOptionValue("df");
                 drlPath = "/resources/UPSDRL/" + drlFileName;
-                drlTemplatePath = Path.of("/Users/mitch.christensen/dev/iphone-discount 2/src/test" + drlPath);
+                drlTemplatePath = Path.of("src/test" + drlPath);
             }
 
             if(cmd.hasOption("dpc")) {
@@ -244,8 +333,12 @@ public class Compiler {
                 this.orgName = cmd.getOptionValue("on");
             }
 
-            if(cmd.hasOption("pcs")) {
-                this.productCatalogSize = Integer.valueOf(cmd.getOptionValue("on"));
+            if(cmd.hasOption("pc")) {
+                this.productCount = Integer.valueOf(cmd.getOptionValue("pc"));
+            }
+
+            if(cmd.hasOption("pcc")) {
+                this.productCategoryCount = Integer.valueOf(cmd.getOptionValue("pcc"));
             }
 
             if(cmd.hasOption("rem")) {
@@ -254,6 +347,10 @@ public class Compiler {
 
             if(cmd.hasOption("rc")) {
                 this.rulesetCount = Integer.valueOf(cmd.getOptionValue("rc"));
+            }
+
+            if(cmd.hasOption("upc")) {
+                this.useProductCatalog = true;
             }
 
             if(cmd.hasOption("ver")) {

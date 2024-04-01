@@ -14,15 +14,27 @@ import industries.nearcore.rule.engine.loyaltyMember;
 global industries.nearcore.rule.engine.ActionHelper actionHelper;
 
 
-rule "UP_RS_193_Rule_NonEliglible_{0}-1"
+
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-1-qualify"
 dialect "java"
 salience -2
 date-effective "2-Nov-2023"
     when
+        not String( this == "UP_RS_193_Rule_NonEliglible_{0}-1 is ELIGIBLE" )
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}") && cartLineProductCategoryId == "Category1"))
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
-        $hdr : cartDetails()
+    then
+        insertLogical( "UP_RS_193_Rule_NonEliglible_{0}-1 is ELIGIBLE" );
+end
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-1-apply"
+dialect "java"
+salience -2
+date-effective "2-Nov-2023"
+    when
+        String( this == "UP_RS_193_Rule_NonEliglible_{0}-1 is ELIGIBLE" )
     then
         actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-1");
 end
@@ -42,17 +54,27 @@ date-effective "2-Nov-2023"
 end
 
 
-rule "UP_RS_193_Rule_NonEliglible_{0}-3"
+rule "UP_RS_193_Rule_NonEliglible_{0}-3-qualify"
 dialect "java"
 salience -3
 date-effective "2-Nov-2023"
     when
+        not String( this == "UP_RS_193_Rule_NonEliglible_{0}-3 is ELIGIBLE" )
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
         $cartDetails2 : cartDetails(transactionAmount >= 500.0B && transactionAmount <= 1000.0B && currencyISOCode == "USD")
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
     then
-       actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-3");
+        insertLogical("UP_RS_193_Rule_NonEliglible_{0}-3 is ELIGIBLE");
+end
 
+rule "UP_RS_193_Rule_NonEliglible_{0}-3-apply"
+dialect "java"
+salience -3
+date-effective "2-Nov-2023"
+    when
+        String( this == "UP_RS_193_Rule_NonEliglible_{0}-3 is ELIGIBLE" )
+    then
+        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-3");
 end
 
 
@@ -71,15 +93,26 @@ end
 
 
 
-rule "UP_RS_193_Rule_NonEliglible_{0}-5"
+rule "UP_RS_193_Rule_NonEliglible_{0}-5-qualify"
 dialect "java"
 salience -4
 date-effective "2-Nov-2023"
     when
+        not String( this == "UP_RS_193_Rule_NonEliglible_{0}-5 is ELIGIBLE")
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{1}" , "NotUsedProduct" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         Number(doubleValue() > 1) from accumulate ( cartLineDetails(cartLineProductId in ("{2}" ) && $qty : cartLineItemQuantity != null), sum($qty) )
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
+    then
+        insertLogical("UP_RS_193_Rule_NonEliglible_{0}-5 is ELIGIBLE");
+end
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-5-apply"
+dialect "java"
+salience -4
+date-effective "2-Nov-2023"
+    when
+        String( this == "UP_RS_193_Rule_NonEliglible_{0}-5 is ELIGIBLE")
         $cartLineDetails4 : cartLineDetails(cartLineProductCategoryId == "Category1")
     then
         actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-5");
@@ -104,14 +137,25 @@ end
 
 
 
-rule "UP_RS_193_Rule_NonEliglible_{0}-7"
+rule "UP_RS_193_Rule_NonEliglible_{0}-7-qualify"
 dialect "java"
 salience -5
 date-effective "2-Nov-2023"
     when
+        not String( this == "UP_RS_193_Rule_NonEliglible_{0}-7 is ELIGIBLE")
         exists($cartLineDetails1 : cartLineDetails(cartLineProductId in ("{1}" ) && cartLineProductCategoryId == "Category1"))
         not $cartLineDetails2 : cartLineDetails(cartLineProductId == ("NotInProduct"))
         $loyaltyMember3 : loyaltyMember(isLoyaltyMember == true)
+    then
+        insertLogical("UP_RS_193_Rule_NonEliglible_{0}-7 is ELIGIBLE");
+end
+
+rule "UP_RS_193_Rule_NonEliglible_{0}-7-apply"
+dialect "java"
+salience -5
+date-effective "2-Nov-2023"
+    when
+        String( this == "UP_RS_193_Rule_NonEliglible_{0}-7 is ELIGIBLE")
     then
        actionHelper.addAction("Executed UP_RS_193_Rule_NonEliglible_{0}-7");
 
