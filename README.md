@@ -18,9 +18,13 @@ I've added lots of command line options to execute tests in various ways.  Here 
 - **Compiler**
     - No CLI parameters (all defaults)
         * Compiles the ```RuleSet1Original-fixed.drl``` DRL template file to a Drools Exec Model KJAR named ```org.salesforce.ncre:250_Q4:0.0.1.kjar``` in the project root directory with 500 rule sets resulting in an Exec Model KJAR
+    - ```-rc 1 -df RuleSet1Original-56.drl```
+        * Create minimal KJAR for testing the cross-product symptom.  Creates a single rule set template instance (```--rulesetCount```) from the rule set template file (```RuleSet1Original-5.drl```) which contains only rules #5 & #6
 - **Engine**
     - No CLI parameters (all defaults)
         * Stateful execution of the ```org.salesforce.ncre:250_Q4:0.0.1.kjar``` file using a sales transaction with 200 line items
+    - ```-da -ms```
+        * Run the rules with 200 shopping cart items, print the rule execution results to stdout (```--dumpActions```), marshal the ```KieSession`` (```--marshalSession```) after rule execution completes.
 
 ## DRL Template Files
 This project is driven from a set of DRL template files.  Each template files defines the rules associated with a single rule set.  All of the various DRL template files are located in the ```src/test/resources/UPSDRL``` folder.  The templates format is a standard DRL format with template variables which are populated at runtime to create a final set of DRL files from the template.
