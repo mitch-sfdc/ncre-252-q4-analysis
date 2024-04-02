@@ -3,6 +3,7 @@ package com.salesforce.ncre.debug;
 import java.util.*;
 
 import com.salesforce.ncre.Engine;
+import industries.nearcore.rule.engine.cartLineDetails;
 import org.drools.base.reteoo.NodeTypeEnums;
 import org.drools.core.common.InternalFactHandle;
 import org.drools.core.common.InternalWorkingMemory;
@@ -34,7 +35,7 @@ public class PhreakActivationIteratorNcre implements Iterator {
     private static final Logger LOG = LoggerFactory.getLogger(PhreakActivationIteratorNcre.class);
     private java.util.Iterator<InternalMatch> agendaItemIter;
     List<InternalMatch> internalMatches;
-    private final StringBuilder graphBuilder = new StringBuilder("digraph{\n");
+    private static final StringBuilder graphBuilder = new StringBuilder("digraph{\n");
     private static final Map<Integer, String> nodeTypeToNodeNameMap = new HashMap<>();
 
     static {
@@ -47,7 +48,7 @@ public class PhreakActivationIteratorNcre implements Iterator {
         nodeTypeToNodeNameMap.put(80, "ObjectSource");
         nodeTypeToNodeNameMap.put(91, "QueryTerminalNode");
         nodeTypeToNodeNameMap.put(101, "RuleTerminalNode");
-        nodeTypeToNodeNameMap.put(120, "EvalConditionNode");
+        nodeTypeToNodeNameMap.put(120, "LeftInputAdapterNode");
         nodeTypeToNodeNameMap.put(131, "EvalConditionNode");
         nodeTypeToNodeNameMap.put(133, "TimerConditionNode");
         nodeTypeToNodeNameMap.put(135, "AsyncSendNode");
@@ -76,7 +77,8 @@ public class PhreakActivationIteratorNcre implements Iterator {
         graphBuilder.append("label=\"KieSession Visualizer\"\n")
                 .append("tooltip=\"Visualizing session memory\"\n");
 
-        this.internalMatches = collectAgendaItems(kbase, reteEvaluator, graphBuilder);
+        // collect all the activation records and get the iterator
+        this.internalMatches = collectAgendaItems(kbase, reteEvaluator);
         this.agendaItemIter = this.internalMatches.iterator();
 
         // close the digraph representation
@@ -91,21 +93,53 @@ public class PhreakActivationIteratorNcre implements Iterator {
         return this.agendaItemIter.hasNext() ? this.agendaItemIter.next() : null;
     }
 
+    /**
+     * Collect all the activation objects in the session
+     * @param kbase  KieBase
+     * @param reteEvaluator KieSession
+     * @return List of internal match objects
+     */
+    public static List<InternalMatch> collectAgendaItems(InternalRuleBase kbase, ReteEvaluator reteEvaluator) {
+        LOG.trace("Enter collectAgendaItems()");
+        Set<RuleTerminalNode> nodeSet = new HashSet();
+
+        // collect all the rule terminal nodes
+        List<RuleTerminalNode> rtnList = populateRuleTerminalNodes(kbase, nodeSet);
+        List<InternalMatch> internalMatches = new ArrayList();
+        java.util.Iterator nodeListIterator = rtnList.iterator();
+
+        while(nodeListIterator.hasNext()) {
+            RuleTerminalNode rtn = (RuleTerminalNode)nodeListIterator.next();
+
+            // create a graph node for each RTN
+            graphBuilder.append("\"").append(rtn.getRule().getName()).append("\"")
+                    .append(" [ shape=\"rect\" tooltip=\"")
+                    .append(nodeTypeToNodeNameMap.get(Integer.valueOf(rtn.getType())))
+                    .append("\" color=\"red\"]\n");
+
+            if (nodeSet.contains(rtn)) {
+                LOG.trace("Process left tuples for RTN: " + rtn.getRule().getName());
+                processLeftTuples(rtn.getLeftTupleSource(), internalMatches, nodeSet, reteEvaluator);
+            }
+        }
+
+        return internalMatches;
+    }
+
     public static List<RuleTerminalNode> populateRuleTerminalNodes(InternalRuleBase kbase, Set<RuleTerminalNode> nodeSet) {
         LOG.trace("Enter populateRuleTerminalNodes()");
 
         Collection<TerminalNode[]> nodesWithArray = kbase.getReteooBuilder().getTerminalNodes().values();
-        java.util.Iterator var3 = nodesWithArray.iterator();
+        LOG.trace("Terminal node array count: " + nodesWithArray.size());
+        java.util.Iterator nodeArrayIterator = nodesWithArray.iterator();
 
-        while(var3.hasNext()) {
-            TerminalNode[] nodeArray = (TerminalNode[])var3.next();
-            TerminalNode[] var5 = nodeArray;
-            int var6 = nodeArray.length;
+        while(nodeArrayIterator.hasNext()) {
+            TerminalNode[] terminalNodes = (TerminalNode[])nodeArrayIterator.next();
 
-            for(int var7 = 0; var7 < var6; ++var7) {
-                TerminalNode node = var5[var7];
-                if (node.getType() == 101) {
-                    nodeSet.add((RuleTerminalNode)node);
+            for(int i = 0; i < terminalNodes.length; ++i) {
+                TerminalNode terminalNode = terminalNodes[i];
+                if (terminalNode.getType() == 101 /*RuleTerminalNode*/) {
+                    nodeSet.add((RuleTerminalNode)terminalNode);
                 }
             }
         }
@@ -113,77 +147,60 @@ public class PhreakActivationIteratorNcre implements Iterator {
         return Arrays.asList((RuleTerminalNode[])nodeSet.toArray(new RuleTerminalNode[nodeSet.size()]));
     }
 
-    public static List<InternalMatch> collectAgendaItems(InternalRuleBase kbase, ReteEvaluator reteEvaluator,
-                                                         StringBuilder graphBuilder) {
-        LOG.trace("Enter collectAgendaItems()");
-
-        Set<RuleTerminalNode> nodeSet = new HashSet();
-        List<RuleTerminalNode> nodeList = populateRuleTerminalNodes(kbase, nodeSet);
-        List<InternalMatch> internalMatches = new ArrayList();
-        java.util.Iterator var5 = nodeList.iterator();
-
-        while(var5.hasNext()) {
-            RuleTerminalNode rtn = (RuleTerminalNode)var5.next();
-            graphBuilder.append("\"").append(rtn.getRule().getName()).append("\"")
-                    .append(" [ shape=\"rect\" tooltip=\"")
-                    .append(nodeTypeToNodeNameMap.get(Integer.valueOf(rtn.getType())))
-                    .append("\" color=\"red\"]\n");
-            if (nodeSet.contains(rtn)) {
-                processLeftTuples(rtn.getLeftTupleSource(), internalMatches, nodeSet, reteEvaluator, graphBuilder);
-            }
-        }
-
-        return internalMatches;
-    }
-
-    public static void processLeftTuples(LeftTupleSource node, List<InternalMatch> internalMatches,
-                                         Set<RuleTerminalNode> nodeSet, ReteEvaluator reteEvaluator,
-                                         StringBuilder graphBuilder) {
+    public static void processLeftTuples(LeftTupleSource leftTupleSourceIn, List<InternalMatch> internalMatches,
+                                         Set<RuleTerminalNode> nodeSet, ReteEvaluator reteEvaluator) {
         LOG.trace("Enter processLeftTuples()");
-        LeftTupleSource node1;
+        LeftTupleSource leftTupleSource;
 
         graphBuilder.append("\"")
-                .append(nodeTypeToNodeNameMap.get(Integer.valueOf(node.getType())))
-                .append("-").append(node.getId()).append("\" []\n");
+                .append(nodeTypeToNodeNameMap.get(Integer.valueOf(leftTupleSourceIn.getType())))
+                .append("-").append(leftTupleSourceIn.getId()).append("\" []\n");
 
-        // skip LeftInputAdapterNode (120) nodes
-        for(node1 = node; 120 != node1.getType(); node1 = node1.getLeftTupleSource()) {
+        // skip to the first LeftInputAdapterNode (120) nodes
+        for(leftTupleSource = leftTupleSourceIn;
+            120 /*LeftInputAdapterNode*/ != leftTupleSource.getType();
+            leftTupleSource = leftTupleSource.getLeftTupleSource()) {
         }
 
-        for(int maxShareCount = node1.getAssociationsSize(); 120 != node.getType(); node = node.getLeftTupleSource()) {
-            Memory memory = reteEvaluator.getNodeMemories().peekNodeMemory(node);
+        for(int maxShareCount = leftTupleSource.getAssociationsSize();
+            120 /*LeftInputAdapterNode*/ != leftTupleSourceIn.getType();
+            leftTupleSourceIn = leftTupleSourceIn.getLeftTupleSource()) {
+            Memory memory = reteEvaluator.getNodeMemories().peekNodeMemory(leftTupleSourceIn);
             if (memory == null || memory.getSegmentMemory() == null) {
                 return;
             }
 
             graphBuilder.append("\"")
-                    .append(nodeTypeToNodeNameMap.get(Integer.valueOf(node1.getType())))
-                    .append("-").append(node1.getId()).append("\" []\n");
+                    .append(nodeTypeToNodeNameMap.get(Integer.valueOf(leftTupleSource.getType())))
+                    .append("-").append(leftTupleSource.getId()).append("\" []\n");
 
-            if (node.getAssociationsSize() == maxShareCount) {
+            if (leftTupleSourceIn.getAssociationsSize() == maxShareCount) {
                 FastIterator it;
                 LeftTuple lt;
-                if (NodeTypeEnums.isBetaNode(node)) {
+                if (NodeTypeEnums.isBetaNode(leftTupleSourceIn)) {
                     BetaMemory bm;
-                    if (211 == node.getType()) {
+                    if (211 /*AccumulateNode*/ == leftTupleSourceIn.getType()) {
                         AccumulateNode.AccumulateMemory am = (AccumulateNode.AccumulateMemory)memory;
                         bm = am.getBetaMemory();
                         it = bm.getLeftTupleMemory().fullFastIterator();
 
-                        for(Tuple tuple = BetaNode.getFirstTuple(bm.getLeftTupleMemory(), it); tuple != null; tuple = (LeftTuple)it.next(tuple)) {
-                            AccumulateNode.AccumulateContext accctx = (AccumulateNode.AccumulateContext)((Tuple)tuple).getContextObject();
+                        for(Tuple tuple = BetaNode.getFirstTuple(bm.getLeftTupleMemory(), it);
+                            tuple != null; tuple = (LeftTuple)it.next(tuple)) {
+                            AccumulateNode.AccumulateContext accctx =
+                                    (AccumulateNode.AccumulateContext)((Tuple)tuple).getContextObject();
                             LOG.trace("Calling collectFromPeers()");
                             collectFromPeers((LeftTuple)accctx.getResultLeftTuple(), internalMatches, nodeSet, reteEvaluator);
                         }
                     } else {
                         FastIterator fastIterator;
-                        if (201 == node.getType()) {
-                            bm = (BetaMemory)reteEvaluator.getNodeMemories().peekNodeMemory(node);
+                        if (201 /*ExistsNode*/ == leftTupleSourceIn.getType()) {
+                            bm = (BetaMemory)reteEvaluator.getNodeMemories().peekNodeMemory(leftTupleSourceIn);
                             if (bm != null) {
-                                bm = (BetaMemory)reteEvaluator.getNodeMemories().peekNodeMemory(node);
+                                bm = (BetaMemory)reteEvaluator.getNodeMemories().peekNodeMemory(leftTupleSourceIn);
                                 fastIterator = bm.getRightTupleMemory().fullFastIterator();
 
-                                for(RightTuple rt = (RightTuple)BetaNode.getFirstTuple(bm.getRightTupleMemory(), fastIterator); rt != null; rt = (RightTuple)fastIterator.next(rt)) {
+                                for(RightTuple rt = (RightTuple)BetaNode.getFirstTuple(bm.getRightTupleMemory(), fastIterator);
+                                    rt != null; rt = (RightTuple)fastIterator.next(rt)) {
                                     for(lt = rt.getBlocked(); lt != null; lt = lt.getBlockedNext()) {
                                         if (lt.getFirstChild() != null) {
                                             LOG.trace("Calling collectFromPeers()");
@@ -193,7 +210,7 @@ public class PhreakActivationIteratorNcre implements Iterator {
                                 }
                             }
                         } else {
-                            bm = (BetaMemory)reteEvaluator.getNodeMemories().peekNodeMemory(node);
+                            bm = (BetaMemory)reteEvaluator.getNodeMemories().peekNodeMemory(leftTupleSourceIn);
                             if (bm != null) {
                                 fastIterator = bm.getLeftTupleMemory().fullFastIterator();
 
@@ -209,8 +226,8 @@ public class PhreakActivationIteratorNcre implements Iterator {
                     return;
                 }
 
-                if (151 == node.getType()) {
-                    FromNode.FromMemory fm = (FromNode.FromMemory)reteEvaluator.getNodeMemories().peekNodeMemory(node);
+                if (151 /*FromNode*/ == leftTupleSourceIn.getType()) {
+                    FromNode.FromMemory fm = (FromNode.FromMemory)reteEvaluator.getNodeMemories().peekNodeMemory(leftTupleSourceIn);
                     if (fm != null) {
                         TupleMemory ltm = fm.getBetaMemory().getLeftTupleMemory();
                         it = ltm.fullFastIterator();
@@ -227,25 +244,27 @@ public class PhreakActivationIteratorNcre implements Iterator {
             }
         }
 
-        LeftInputAdapterNode lian = (LeftInputAdapterNode)node;
+        LeftInputAdapterNode lian = (LeftInputAdapterNode)leftTupleSourceIn;
         if (!lian.isTerminal()) {
-            Memory memory = reteEvaluator.getNodeMemories().peekNodeMemory(node);
+            Memory memory = reteEvaluator.getNodeMemories().peekNodeMemory(leftTupleSourceIn);
             if (memory == null || memory.getSegmentMemory() == null) {
                 return;
             }
         }
 
-        ObjectSource os;
-        for(os = lian.getObjectSource(); os.getType() != 30; os = os.getParentObjectSource()) {
+        // find the object type node (OTN)
+        ObjectSource objectSource;
+        for(objectSource = lian.getObjectSource(); objectSource.getType() != 30 /*ObjectTypeNode*/;
+            objectSource = objectSource.getParentObjectSource()) {
         }
 
-        ObjectTypeNode otn = (ObjectTypeNode)os;
+        ObjectTypeNode otn = (ObjectTypeNode)objectSource;
         LeftTupleSink firstLiaSink = lian.getSinkPropagator().getFirstLeftTupleSink();
         java.util.Iterator<InternalFactHandle> it = otn.getFactHandlesIterator((InternalWorkingMemory)reteEvaluator);
 
         while(it.hasNext()) {
-            InternalFactHandle fh = (InternalFactHandle)it.next();
-            fh.forEachLeftTuple((ltx) -> {
+            InternalFactHandle factHandle = (InternalFactHandle)it.next();
+            factHandle.forEachLeftTuple((ltx) -> {
                 if (ltx.getTupleSink() == firstLiaSink) {
                     collectFromLeftInput(ltx, internalMatches, nodeSet, reteEvaluator);
                 }
@@ -255,17 +274,18 @@ public class PhreakActivationIteratorNcre implements Iterator {
 
     }
 
+    // provide access to the generated node graph
     public String getGraph() {
         return graphBuilder.toString();
     }
 
 
-    private static void collectFromLeftInput(LeftTuple lt, List<InternalMatch> internalMatches, Set<RuleTerminalNode> nodeSet, ReteEvaluator reteEvaluator) {
+    private static void collectFromLeftInput(LeftTuple leftTuple, List<InternalMatch> internalMatches,
+                                             Set<RuleTerminalNode> nodeSet, ReteEvaluator reteEvaluator) {
         LOG.trace("Enter collectFromLeftInput()");
-        while(lt != null) {
-            LOG.trace("Calling collectFromPeers()");
-            collectFromPeers(lt, internalMatches, nodeSet, reteEvaluator);
-            lt = lt.getHandleNext();
+        while(leftTuple != null) {
+            collectFromPeers(leftTuple, internalMatches, nodeSet, reteEvaluator);
+            leftTuple = leftTuple.getHandleNext();
         }
 
     }
@@ -274,7 +294,7 @@ public class PhreakActivationIteratorNcre implements Iterator {
         LOG.trace("Enter collectFromPeers()");
 
         for(; peer != null; peer = peer.getPeer()) {
-            if (peer.getTupleSink().getType() == 211) {
+            if (peer.getTupleSink().getType() == 211 /*AccumulateNode*/) {
                 LOG.trace("Accumulate Peer Found");
                 Object accctx = peer.getContextObject();
                 if (accctx instanceof AccumulateNode.AccumulateContext) {
@@ -284,8 +304,16 @@ public class PhreakActivationIteratorNcre implements Iterator {
                 for(LeftTuple childLt = peer.getFirstChild(); childLt != null; childLt = childLt.getHandleNext()) {
                     collectFromLeftInput(childLt, internalMatches, nodeSet, reteEvaluator);
                 }
-            } else if (peer.getTupleSink().getType() == 101) {
-                LOG.trace("RuleTerminalNode Peer Found");
+            } else if (peer.getTupleSink().getType() == 101 /*RuleTerminalNode*/) {
+                LOG.trace("RuleTerminalNode Peer Found : " +
+                        peer.getFactHandle().getObjectClassName() + ", productId : " +
+                        ((cartLineDetails)peer.getFactHandle().getObject()).getCartLineProductId());
+
+                // add the graph node
+                graphBuilder.append("\"")
+                        .append(((cartLineDetails)peer.getFactHandle().getObject()).getCartLineProductId())
+                                .append("-").append(peer.getIndex()).append("\" []\n");
+
                 internalMatches.add((InternalMatch)peer);
                 nodeSet.remove(peer.getTupleSink());
             }
