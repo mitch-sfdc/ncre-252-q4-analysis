@@ -73,6 +73,12 @@ public class Engine {
         STATELESS, STATEFUL
     }
 
+    /**
+     * Run the rule engine
+     *
+     * @param args command line arguments (processed by commons-cli)
+     * @throws IOException
+     */
     public static void main(String[] args) throws IOException {
         Engine engine = new Engine();
 
@@ -476,12 +482,12 @@ public class Engine {
 
         //  -pc --productCount : The number of products in the product catalog (default : 10,000)
         option = new Option("pc", "productCount", true,
-                "The number of products in the product catalog (default : 10,000)");
+                "[NOT IMPLEMENTED] The number of products in the product catalog (default : 10,000)");
         options.addOption(option);
 
         //  -pcc --productCategoryCount : The number of categories in the product catalog (default : 10)
         option = new Option("pcc", "productCategoryCount", true,
-                "The number of categories in the product catalog (default : 10)");
+                "[NOT IMPLEMENTED] The number of categories in the product catalog (default : 10)");
         options.addOption(option);
 
         // -rem, --ruleExecMode : Run the engine using the Drools Rule Exec Model
@@ -502,7 +508,7 @@ public class Engine {
 
         // -upc, --useProductCatalog : Generate product names from a product catalog simulator (default : false)
         option = new Option("upc", "useProductCatalog", false,
-                "Generate product names from a product catalog simulator (default : false)");
+                "[NOT IMPLEMENTED] Generate product names from a product catalog simulator (default : false)");
         options.addOption(option);
     }
 
@@ -569,10 +575,12 @@ public class Engine {
 
             if(cmd.hasOption("pc")) {
                 this.productCount = Integer.valueOf(cmd.getOptionValue("pc"));
+                throw new IllegalArgumentException("Not yet implemented.");
             }
 
             if(cmd.hasOption("pcc")) {
                 this.productCategoryCount = Integer.valueOf(cmd.getOptionValue("pcc"));
+                throw new IllegalArgumentException("Not yet implemented.");
             }
 
             if(cmd.hasOption("rem")) {
@@ -589,6 +597,7 @@ public class Engine {
 
             if(cmd.hasOption("upc")) {
                 this.useProductCatalog = true;
+                throw new IllegalArgumentException("Not yet implemented.");
             }
 
         } catch (ParseException e) {

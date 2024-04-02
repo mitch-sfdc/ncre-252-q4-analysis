@@ -56,6 +56,13 @@ public class Compiler {
     // force a singleton
     private Compiler() {}
 
+    /**
+     * Compile a complete DRL file from a rule set template.  Reads the template, and generates a sequence
+     * of product IDs and instantiats the template, replacing the template variables.
+     *
+     * @param args Command line arguments (processed using commons-cli)
+     * @throws IOException
+     */
     public static void main(String[] args) throws IOException {
         // define and parse the command line options
         INSTANCE.defineOptions();
@@ -241,27 +248,27 @@ public class Compiler {
 
         // -kf, --kjarFilename : The name of the generated KJAR file (default: org.salesforce.ncre:250_Q4:0.0.1)
         option = new Option("kf", "kjarFilename", true,
-                "The generated KJAR filename");
+                "The generated KJAR filename (default : [org]:[libraryName]:[version].kjar");
         options.addOption(option);
 
         // -lib, --libraryName : The rule library name
         option = new Option("lib", "libraryName", true,
-                "The organization name used in the release ID and default KJAR name");
+                "The organization name used in the release ID and default KJAR name (default : 250_Q4");
         options.addOption(option);
 
         // -on, --orgName : The organization name
         option = new Option("on", "orgName", true,
-                "The organization name used in the release ID and default KJAR name");
+                "The organization name used in the release ID and default KJAR name (default : org.salesforce.ncre");
         options.addOption(option);
 
         //  -pc --productCount : The number of products in the product catalog (default : 10,000)
         option = new Option("pc", "productCount", true,
-                "The number of products in the product catalog (default : 10,000)");
+                "[NOT IMPLEMENTED] The number of products in the product catalog (default : 10,000)");
         options.addOption(option);
 
         //  -pcc --productCategoryCount : The number of categories in the product catalog (default : 10)
         option = new Option("pcc", "productCategoryCount", true,
-                "The number of categories in the product catalog (default : 10)");
+                "[NOT IMPLEMENTED] The number of categories in the product catalog (default : 10)");
         options.addOption(option);
 
         // -rc, --rulesetCount : The number of rule sets to generate
@@ -276,7 +283,7 @@ public class Compiler {
 
         // -upc, --useProductCatalog : Generate product names from a product catalog simulator (default : false)
         option = new Option("upc", "useProductCatalog", false,
-                "Generate product names from a product catalog simulator (default : false)");
+                "[NOT IMPLEMENTED] Generate product names from a product catalog simulator (default : false)");
         options.addOption(option);
 
         // -ver, --version : The version of the generated KJAR file
@@ -335,10 +342,12 @@ public class Compiler {
 
             if(cmd.hasOption("pc")) {
                 this.productCount = Integer.valueOf(cmd.getOptionValue("pc"));
+                throw new IllegalArgumentException("Feature not yet supported.");
             }
 
             if(cmd.hasOption("pcc")) {
                 this.productCategoryCount = Integer.valueOf(cmd.getOptionValue("pcc"));
+                throw new IllegalArgumentException("Feature not yet supported.");
             }
 
             if(cmd.hasOption("rem")) {
@@ -351,6 +360,7 @@ public class Compiler {
 
             if(cmd.hasOption("upc")) {
                 this.useProductCatalog = true;
+                throw new IllegalArgumentException("Feature not yet supported.");
             }
 
             if(cmd.hasOption("ver")) {
